@@ -1,0 +1,71 @@
+# Build APK com Buildozer (android debug)
+# Gatilhos: push na branch main e execução manual (workflow_dispatch)
+name: Build APK (Buildozer)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # opcional: se quiser apontar JAVA_HOME
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Cache buildozer / p4a / pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.local/share/python-for-android
+            ~/.cache/pip
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('**/buildozer.spec') }}-${{ hashFiles('**/requirements.txt') }}
+
+      - name: Instalar dependências de SO
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-pip python3-venv build-essential git openjdk-11-jdk unzip \
+            zlib1g-dev libncurses5 libstdc++6 libffi-dev libssl-dev liblz4-tool \
+            autoconf automake pkg-config
+        shell: bash
+
+      - name: Criar virtualenv e instalar Buildozer
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install "buildozer==1.4.4" cython
+        shell: bash
+
+      - name: Mostrar infos (debug)
+        run: |
+          source .venv/bin/activate
+          python --version
+          pip --version
+          buildozer --version || true
+        shell: bash
+
+      - name: Rodar buildozer (android debug)
+        run: |
+          set -e
+          source .venv/bin/activate
+          # Certifique-se de ter buildozer.spec na raiz do repo e requirements.txt apropriado
+          buildozer -v android debug
+        shell: bash
+        timeout-minutes: 120
+
+      - name: Upload do APK gerado como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifacts
+          path: |
+            bin/*.apk
+            bin/*.aab
